@@ -33,9 +33,10 @@ def train(
     model.train()
     global_train_step, global_val_step = 0, 0
     for epoch in tqdm(range(epoch_num)):
+        print("-" * 30)
         print(f"Epoch {epoch}/{epoch_num}")
 
-        train_step(
+        global_train_step = train_step(
             epoch=epoch,
             model=model,
             optimizer=optimizer,
@@ -53,7 +54,7 @@ def train(
         if val_dataloader is None:
             continue
 
-        validation_step(
+        global_val_step = validation_step(
             epoch=epoch,
             model=model,
             val_dataloader=val_dataloader,
@@ -79,7 +80,7 @@ def train_step(
     tb_logger: SummaryWriter | None,  # tensorboard logger
     global_train_step: int,
     save_on_val: bool = True,  # saves checkpoint on the validation stage
-) -> None:
+) -> int:
     model.train()
 
     batch_idx = 0
@@ -116,6 +117,8 @@ def train_step(
     if not save_on_val:
         checkpointer.save(metric_val=total_train_metric, epoch=epoch)
 
+    return global_train_step
+
 
 def validation_step(
     epoch: int,
@@ -127,8 +130,9 @@ def validation_step(
     tb_logger: SummaryWriter | None,  # tensorboard logger
     global_val_step: int,
     save_on_val: bool = True,  # saves checkpoint on the validation stage
-) -> None:
+) -> int:
     model.eval()
+
     total_val_loss, total_val_metric = 0.0, 0.0
     for inputs, targets in tqdm(val_dataloader, desc="Validation"):
         with torch.no_grad():
@@ -138,9 +142,10 @@ def validation_step(
             total_val_loss += loss.item()
             total_val_metric += metric.item()
 
-        tb_logger.add_scalar("loss_val_batch", loss.item(), global_val_step)
-        tb_logger.add_scalar("metric_val_batch", metric.item(), global_val_step)
-        global_val_step += 1
+        if tb_logger is not None:
+            tb_logger.add_scalar("loss_val_batch", loss.item(), global_val_step)
+            tb_logger.add_scalar("metric_val_batch", metric.item(), global_val_step)
+            global_val_step += 1
 
     total_val_loss /= len(val_dataloader)
     total_val_metric /= len(val_dataloader)
@@ -152,6 +157,8 @@ def validation_step(
 
     if save_on_val:
         checkpointer.save(metric_val=total_val_metric, epoch=epoch)
+
+    return global_val_step
 
 
 @dataclass
@@ -168,6 +175,7 @@ class CheckpointSaver:
         model: nn.Module,
         metric_name: str,
         save_dir: str,
+        rm_save_dir: bool = False,
         max_history: int = 1,
         should_minimize: bool = True,
     ) -> None:
@@ -189,9 +197,10 @@ class CheckpointSaver:
 
         self._storage: list[Checkpoint] = []
 
-        if os.path.exists(save_dir):
+        if os.path.exists(save_dir) and rm_save_dir:
             rmtree(save_dir)
-            os.makedirs(save_dir, exist_ok=True)
+
+        os.makedirs(save_dir, exist_ok=True)
 
     def save(self, metric_val: float, epoch: int) -> None:
         """Saves the checkpoint.
