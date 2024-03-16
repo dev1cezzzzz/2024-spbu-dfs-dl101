@@ -10,6 +10,7 @@ from typing import Any, Callable
 import torch
 from accelerate import Accelerator
 from torch import nn, optim
+from torch.nn import functional as F  # noqa
 from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -159,6 +160,24 @@ def validation_step(
         checkpointer.save(metric_val=total_val_metric, epoch=epoch)
 
     return global_val_step
+
+
+EPSILON = 1e-9
+
+
+class MulticlassDiceLoss(nn.Module):
+    def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        probas = F.softmax(logits, dim=1)
+
+        # weights = torch.ones((1, targets.shape[1]))
+        # weights = weights / (torch.sum(targets, (0, 2, 3)) + EPSILON)
+
+        intersection = (targets * probas).sum((0, 2, 3))
+        cardinality = (targets + probas).sum((0, 2, 3))
+
+        dice_coefficient = (2.0 * intersection / (cardinality + EPSILON)).mean()
+
+        return 1.0 - dice_coefficient
 
 
 @dataclass
