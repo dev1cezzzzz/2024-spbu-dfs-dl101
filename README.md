@@ -18,6 +18,11 @@ Google colab, pytorch
 семантической сегментации
 
 
+### Занятие 4
+Обучение моделей в Pytorch: transfer learning, CVAT, обзоры бэкбонов для задач 
+компьютерного зрения
+
+
 ## Установка окружения
 ```console
 python -m venv venv
